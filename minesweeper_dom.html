@@ -1,0 +1,301 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>Augmented Minesweeper</title>
+	<script src="com.graviness.utf-8.util.MersenneTwister.js"></script>
+	<script src="jquery-1.4.2.min.js"></script>
+	<script src="jquery.rightClick.js"></script>
+	<script src="jquery-ui-1.8.custom.min.js"></script>
+	<link href="jquery-ui-1.8.custom.css" rel="stylesheet" />
+	<script>
+	var board = function(){
+		var $minesLeft = $([]);
+		var $press = $([]);
+		var $board = $([]);
+		var alternateActionFlag = false;
+		return {
+			update:function() {
+				$board = $('#board');
+				$minesLeft = $('#minesLeft');
+				$press = $('#press');
+				$(document).keydown(function(){
+					alternateActionFlag = true;
+				}).keyup(function() {
+					alternateActionFlag = false;
+				});
+			},
+			reveal:function(eventTarget) {
+				var $target = $(eventTarget);
+				if ($target.hasClass('unknown') && !$target.hasClass('flag')) {
+					$target.removeClass("unknown");
+					if ($target.hasClass('is_mine')) {$target.addClass('mine'); board.gameOver(false);}
+					else {board.updateTileDisplay($target);}
+				}
+			},
+			toggleFlag:function(eventTarget) {
+				var $target = $(eventTarget).not('.one, .two, .three, .four, .five., .six, .seven, .eight');
+				if ($target.length) {	
+					if ($target.hasClass('flag')) {$target.removeClass('flag');} 
+					else  {$target.addClass('flag');} 
+					$knownNeighbors = board.getNeighbors($target).not('.unknown');
+					for (var i=0; i<$knownNeighbors.length; i++) {board.updateTileDisplay($knownNeighbors.eq(i));}
+					$minesLeft.text($board.find('.is_mine').length - $board.find('.flag').length);
+					if ($minesLeft.text() == "0") {board.gameOver(true);}
+				} else {return false;}
+				
+			},
+			generate:function(x,y,mines) {
+				board.freeze();
+				//console.time("generation");
+				var minesPositions = [];
+				var MT = new MersenneTwister();
+				while (minesPositions.length < mines) {
+					var rawNumber = MT.nextFloat() * ((x * y) + 1);
+					var bombingSpot = rawNumber - (rawNumber % 1);
+					if (bombingSpot != 0 && minesPositions.indexOf(bombingSpot) == -1) {minesPositions.push(bombingSpot);}
+				}
+				
+				var tiles = [];
+				var tileNumber = 1;
+				for (var column=1; column<(y+1); column++) {
+					tiles[column] = [];
+					for (var row=1; row<(x+1); row++) {
+						var currentId = column+'x'+row;
+						if (minesPositions.indexOf(tileNumber) != -1) {tiles[column][row] = $('<div>').attr('id',currentId).addClass('unknown is_mine');}
+						else {tiles[column][row] = $('<div>').attr('id',currentId);}
+						tileNumber++;
+					}
+				}
+				
+				var $tiles = $([]);
+				for (var column=1; column<(y+1); column++) {
+					for (var row=1; row<(x+1); row++) {
+						if (tiles[column][row].hasClass('is_mine') != true) {
+							var $neighbors = $([]);
+							for (var rangeX = (column-1); rangeX < (column+2); rangeX++) {
+								for (var rangeY = (row-1); rangeY < (row+2); rangeY++) {
+									if (rangeX > 0 && rangeX < (y+1) && rangeY > 0 && rangeY < (x+1)) {
+										$neighbors = $.merge($neighbors, tiles[rangeX][rangeY]);
+									}
+								}
+							}
+							switch($neighbors.filter('.is_mine').length) {
+								case 0: tiles[column][row].addClass('unknown is_0'); break;
+								case 1: tiles[column][row].addClass('unknown is_1'); break;
+								case 2: tiles[column][row].addClass('unknown is_2'); break;
+								case 3: tiles[column][row].addClass('unknown is_3'); break;
+								case 4: tiles[column][row].addClass('unknown is_4'); break;
+								case 5: tiles[column][row].addClass('unknown is_5'); break;
+								case 6: tiles[column][row].addClass('unknown is_6'); break;
+								case 7: tiles[column][row].addClass('unknown is_7'); break;
+								case 8: tiles[column][row].addClass('unknown is_8'); break;
+							}
+						}
+						$tiles = $.merge($tiles, tiles[column][row]);
+					}
+				}
+				
+				$board
+					.height(y*14)
+					.width(x*14)
+					.css('border-width','thick')
+					.html($tiles)
+					.bind('mousedown',function(mouseevent) {
+						$press.css('background-position','-48px 0px');
+					}).bind('mouseup',function(mouseevent) {
+						$press.css('background-position','0px 0px');
+						if (alternateActionFlag) {
+							board.reveal(mouseevent.target);
+						} else {
+							board.toggleFlag(mouseevent.target);
+						}
+						return false;
+					});
+				
+				$minesLeft.text($board.find('.is_mine').length - $board.find('.is_mine .flag').length);
+				$press.css('background-position','0 0');
+				//console.timeEnd("generation");
+			},
+			freeze:function() {
+				$board.unbind();
+			},
+			updateTileDisplay:function(target) {
+				//console.time("up");
+			
+				$target = $(target);
+				if (!$target.hasClass('unknown')) {
+					var $neighbors = board.getNeighbors($target);
+					var flagsAround = $neighbors.filter('.flag').length;
+					var minesAround = -1; 
+					if ($target.hasClass('is_0')) {minesAround = 0}
+					else if ($target.hasClass('is_1')) {minesAround = 1}
+					else if ($target.hasClass('is_2')) {minesAround = 2}
+					else if ($target.hasClass('is_3')) {minesAround = 3}
+					else if ($target.hasClass('is_4')) {minesAround = 4}
+					else if ($target.hasClass('is_5')) {minesAround = 5}
+					else if ($target.hasClass('is_6')) {minesAround = 6}
+					else if ($target.hasClass('is_7')) {minesAround = 7}
+					else if ($target.hasClass('is_8')) {minesAround = 8}
+					
+					$target.removeClass('empty one two three four five six seven eight');
+					
+					switch(minesAround - flagsAround) {
+					case 1: $target.addClass('one'); break;
+					case 2: $target.addClass('two'); break;
+					case 3: $target.addClass('three'); break;
+					case 4: $target.addClass('four'); break;
+					case 5: $target.addClass('five'); break;
+					case 6: $target.addClass('six'); break;
+					case 7: $target.addClass('seven'); break;
+					case 8: $target.addClass('eight'); break;
+					case 0: for (var i=0; i<$neighbors.length; i++) {board.reveal($neighbors.get(i));} break;
+					//case 0: $neighbors.each(function(index, element){board.reveal(element)}); 
+					}
+				} 
+				//console.timeEnd("up");
+			},
+			getNeighbors:function($target) {
+				var id = $target.attr('id');
+				var targetCoordinates = id.split("x");
+				var x = parseInt(targetCoordinates[0]);
+				var y = parseInt(targetCoordinates[1]);
+				var $tiles = $([]);
+				for (i=-1; i<2; i++) {
+					for (j=-1; j<2; j++) {
+						var currentX = i+x;
+						var currentY = j+y;
+						$tiles = $.merge($tiles, $board.find('#'+currentX+'x'+currentY));
+					}
+				}
+				return $tiles.not($target);
+			},
+			gameOver:function(win) {
+				board.freeze();
+				if (win) {
+					$press.css('background-position','-72px 0');
+					$board.find('.unknown').not('.flag').css('-126px 0');
+				} else {
+					$press.css('background-position','-24px 0');
+					$board.find('.flag').not('.is_mine').css('background-position','-182px 0');
+					$board.find('.is_mine').not('.flag').not('.mine').css('background-position','-154px 0');
+				}
+			}
+		}
+	}();
+	$(document).ready(function() {
+		//Get generator buttons and make them jQuery buttons
+		var $buttons = $('.button');
+		$buttons.button();
+		board.update();
+		
+		
+		//assign click handlers to the mofos
+		$buttons.eq(0).click(function(){
+			board.generate(8,8,10);
+			return false;
+		});
+		$buttons.eq(1).click(function(){
+			board.generate(16,16,40);
+			return false;
+		});
+		$buttons.eq(2).click(function(){
+			board.generate(30,16,99);
+			return false;
+		});
+		//TODO : Add the custom generator?
+	});
+	</script>
+	<!--
+	.empty {background-position:0px 168px;}
+			$minesLeft = $('#minesLeft');
+			minesLeft = $minesLeft.text();
+			$minesLeft.text(parseInt(minesLeft)-1);
+	.wrongflag {background-position:-182px 0;}
+	-->
+	<style>
+	html, body, div, span, applet, object, iframe, table, caption, tbody, tfoot, thead, tr, th, td, 
+	del, dfn, em, font, img, ins, kbd, q, s, samp, small, strike, strong, sub, sup, tt, var, 
+	h1, h2, h3, h4, h5, h6, p, blockquote, pre, a, abbr, acronym, address, big, cite, code, 
+	dl, dt, dd, ol, ul, li, fieldset, form, label, legend {
+		vertical-align: baseline;
+		font-family: inherit;
+		font-weight: inherit;
+		font-style: inherit;
+		font-size: 100%;
+		outline: 0;
+		padding: 0;
+		margin: 0;
+		border: 0;
+	}
+	:focus {
+		outline: 0;
+	}
+	body {
+		background: white;
+		line-height: 1;
+		color: black;
+	}
+	ol, ul {
+		list-style: none;
+	}
+	table {
+		border-collapse: separate;
+		border-spacing: 0;
+	}
+	caption, th, td {
+		font-weight: normal;
+		text-align: left;
+	}
+	blockquote:before, blockquote:after, q:before, q:after {
+		content: "";
+	}
+	blockquote, q {
+		quotes: "" "";
+	}
+	body {background-color:#000;color:#ccc;}
+	a {color:#00c;}
+	#board {border-width:none; border-style:inset; border-color:#c4c4c4; float:left;}
+	#game {background-color:#c4c4c4; border:medium outset white; float:left;}
+	#hud {background-color:#c4c4c4; border:medium inset gray; float:left;}	
+	#press {height:24px; width:24px; border:thin solid grey; background:#c00 url("smileySprite.gif") 0 0 no-repeat scroll;}
+	#minesLeft {line-height:24px; height:24px; border:thin inset black; background-color:black; width:24px; color:#f00; text-align:center;}
+	
+	#board div {height:14px; width:14px; float:left; overflow:hidden; background:#c4c4c4 url("tileSprite.gif") -126px 0 no-repeat scroll;}
+	#board .unknown {background-position:-168px 0;}
+	#board .one {background-position: 0 0;}
+	#board .two {background-position: -14px 0;}
+	#board .three {background-position: -28px 0;}
+	#board .four {background-position:-42px 0;}
+	#board .five {background-position:-56px 0;}
+	#board .six {background-position:-70px 0;}
+	#board .seven {background-position:-84px 0;}
+	#board .eight {background-position:-98px 0;}
+	#board .flag {background-position:-140px 0;}
+	#board .mine {background-position: -112px 0;}
+	</style>
+  </head>
+  <body>
+    <h1>Casual Minesweeper</h1>
+	<br/>
+	<a href="javascript:try{to generate an easy board;}catch{return false;}" class="button">Easy</a>
+	<a href="javascript:try{to generate a medium board;}catch{return false;}" class="button">Medium</a>
+	<a href="javascript:try{to generate a hard board;}catch{return false;}" class="button">Hard</a>
+	<!--a href="javascript:try{to generate a custom board;}catch{return false;}" class="button">Custom</a-->
+	<br style="clear:left;"/><br/>
+	<div id="game">
+		<div id="hud">
+			<p id="timeElapsed"></p>
+			<div id="press"></div>
+			<p id="minesLeft">&nabla;</p>
+		</div>
+		<div id="board"></div>
+	</div>
+	<br style="clear:left;"/><br/>
+	<h2>Commands :</h2>
+	<ul>
+		<li>Click to toggle flag.</li>
+		<li>Any key + Click to reveal a tile.</li>
+	</ul>
+  </body>
+</html>

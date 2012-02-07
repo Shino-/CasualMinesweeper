@@ -1,0 +1,476 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>Minesweeper (as it should be)</title>
+    <style> /* Small CSS Reset */
+	html, body, div, span, applet, object, iframe, table, caption, tbody, tfoot, thead, tr, th, td, 
+	del, dfn, em, font, img, ins, kbd, q, s, samp, small, strike, strong, sub, sup, tt, var, 
+	h1, h2, h3, h4, h5, h6, p, blockquote, pre, a, abbr, acronym, address, big, cite, code, 
+	dl, dt, dd, ol, ul, li, fieldset, form, label, legend {
+		vertical-align: baseline;
+		font-family: inherit;
+		font-weight: inherit;
+		font-style: inherit;
+		font-size: 100%;
+		outline: 0;
+		padding: 0;
+		margin: 0;
+		border: 0;
+	}
+	:focus {outline: 0;}
+	body {background: white;line-height: 1;color: black;}
+	ol, ul {list-style: none;}
+	table {border-collapse: separate;border-spacing: 0;}
+	caption, th, td {font-weight: normal;text-align: left;}
+	blockquote:before, blockquote:after, q:before, q:after {content: "";}
+	blockquote, q {quotes: "" "";}
+	</style>
+	
+	<link href="jquery-ui-1.8.5.custom.css" rel="stylesheet" />
+	
+	<style>
+	body, input {background-color:#c4c4c4;color:#000;}
+	a {color:#00c;}
+	.button {text-decoration:none; line-height:24px;}
+	#container {margin:0 auto; padding:20px;}
+	#board {border:medium solid transparent; }
+	#game {background-color:#c4c4c4; float:left;}
+	#hud {background-color:#c4c4c4; height:26px;}
+	#smiley {height:24px; width:24px; float:left; border:none; background:transparent url("smileySprite.gif") 0 0 no-repeat scroll;}
+	#timeElapsed {margin-left:5px;}
+	#minesLeft {margin-right:5px;}
+	#minesLeft, #timeElapsed {display:block; width:1px; overflow:visible; line-height:26px; float:left; height:24px; text-align:center;}
+	#minesLeft, #errorlog, #timeElapsed {color:#000;}
+	#errorlog {width:256px; border:none;}
+	#customBoardForm {display:none; margin:0 0 5px 78px}
+	#customBoardForm .field {width:23px;}
+	#board div {height:14px; width:14px; float:left; overflow:hidden; background:#c4c4c4 url("tileSprite.gif") -126px 0 no-repeat scroll;}
+	#board .unknown {background-position:-168px 0;}
+	#board .one {background-position: 0 0;}
+	#board .two {background-position: -14px 0;}
+	#board .three {background-position: -28px 0;}
+	#board .four {background-position:-42px 0;}
+	#board .five {background-position:-56px 0;}
+	#board .six {background-position:-70px 0;}
+	#board .seven {background-position:-84px 0;}
+	#board .eight {background-position:-98px 0;}
+	#board .flag {background-position:-140px 0;}
+	#board .mine {background-position: -112px 0;}
+	</style>
+  </head>
+  <body><div id="container">
+    <h1>Minesweeper (as it should be)</h1>
+	<br/>
+	<form id="customBoardForm">
+		<input type="textfield" class="field" />
+		<input type="textfield" class="field" />
+		<input type="textfield" class="field" />
+		<input type="submit" value="Generate" class="submit" />
+	</form>
+	<a href="Easy board (9x9 - 10 mines)" class="button">Easy</a>
+	<a href="Medium board (16x16 - 40 mines)" class="button">Medium</a>
+	<a href="Hard board (30x16 - 99 mines)" class="button">Hard</a>
+	<a href="Brings out the parameters form" class="button">Custom</a>
+	<br/>
+	<input id="errorlog" type="textfield" disabled="disabled"/>
+	<br style="clear:both;"/>
+	<div id="game">
+		<div id="hud">
+			<p id="timeElapsed"></p>
+			<div id="smiley"></div>
+			<p id="minesLeft"></p>
+		</div>
+		<div id="board"></div>
+	</div>
+	<br style="clear:left;"/>
+	<script src="jquery-1.4.4.min.js"></script>
+	<script src="jquery-ui-1.8.5.custom.min.js"></script>
+	<script src="com.graviness.utf-8.util.MersenneTwister.min.js"></script>
+	<script src="array_big_intersect.js"></script>
+	<script src="shortcut.js"></script>
+	<script>
+	$(document).ready(function() {
+		var $buttons = $('.button'); //buffering buttons
+		$buttons.button(); //pretty buttons first
+		
+		var $form = $('#customBoardForm'); //buffering
+		var $formElements = $form.find('input');
+		var $hud = $('#hud');
+		var $smiley = $hud.find('#smiley');
+		
+		board.update($form, $formElements, $hud, $smiley); //init game
+		
+		$smiley.bind('click',function() {board.quickStart();}); //binding quickStarts
+		shortcut.add(
+			"Space",
+			function() {board.quickStart();},
+			{'type':'keypress'}
+		);
+		shortcut.add(
+			"Enter",
+			function() {board.quickStart();},
+			{'type':'keypress'}
+		);
+		
+		$buttons.eq(0).click(function() {board.prepare(9,9,10); return false;});  //binding button actions
+		$buttons.eq(1).click(function() {board.prepare(16,16,40); return false;});
+		$buttons.eq(2).click(function() {board.prepare(30,16,99); return false;});
+		$buttons.eq(3).click(function() {
+			$form.slideDown('fast',function() {
+				$formElements.eq(0).select();
+			});
+			return false;
+		});
+		$formElements.eq(3).click(function() {board.checkAndGo(); return false;});
+	});
+	var board = function() {
+		//private vars
+		var $minesLeft = $(),
+			minesLeftCounter = 0,
+			unknownsLeftCounter = 0,
+			$smiley = $(),
+			$board = $(),
+			$cleanBoard = $(),
+			$timeElapsed = $(),
+			$form = $(),
+			$formElements = $(),
+			$errorlog = $(),
+			then = new Date(),
+			isGameOver = false,
+		//private functions
+			time = function (on) { //on, starts timer, otherwise stop and display it
+				if (on) {then = new Date();}
+				else {
+					var now = new Date();
+					$timeElapsed.text(Math.round((now - then)/10)/100);
+				}
+			},
+			updateMinesDisplayAndCheckForWin = function(check) {
+				if (minesLeftCounter != $minesLeft.text()) { //update mines display only if needed (no useless dom touch!)
+					$minesLeft.text(minesLeftCounter);
+				}
+				
+				if (check) { //checking is optional as we need to 
+					if (minesLeftCounter == 0 && !isGameOver) {gameOver(true);} //no mines left and not dead ? trigger win
+					if (minesLeftCounter == unknownsLeftCounter && !isGameOver) { //if theres only mines left
+						var $unknownsLeft = $board.find('.unknown:not(.flag)');
+						for (var i=0; i<unknownsLeftCounter; i++) {board.toggleFlag($unknownsLeft.eq(i), true);} //loop !
+						updateMinesDisplayAndCheckForWin(true);
+					}
+				}
+			},
+			updateTileDisplay = function($target) { //sister function of reveal, does dom touches
+				if (!$target.hasClass('unknown')) {
+					$target.removeClass('empty one two three four five six seven eight');
+					
+					switch($.data($target[0]).minesAround - $.data($target[0]).neighbors.filter('.flag').length) {
+					case 1: $target.addClass('one'); break;
+					case 2: $target.addClass('two'); break;
+					case 3: $target.addClass('three'); break;
+					case 4: $target.addClass('four'); break;
+					case 5: $target.addClass('five'); break;
+					case 6: $target.addClass('six'); break;
+					case 7: $target.addClass('seven'); break;
+					case 8: $target.addClass('eight'); break;
+					case 0: $target.addClass('empty');
+							var $revealableNeighbors = $.data($target[0]).neighbors.filter('.unknown:not(.flag)');
+							var $buffer = $();
+							$buffer.length = 1;
+							for (var i=0; i<$revealableNeighbors.length; i++) {
+								($buffer.context = $buffer[0] = $revealableNeighbors[i])
+								board.reveal($buffer);
+							} 
+							break;
+					}
+				}
+			},
+			generateCleanBoard = function(x,y) {
+				var currentId = "";
+				var column = 1;
+				var row = 1;
+				var $tiles = $();
+				var $basicTile = $('<div>').addClass('unknown');
+				for (column=1; column<=y; column++) { //generates basic board with ids
+					for (row=1; row<=x; row++) {
+						$tiles = $.merge($tiles, $basicTile.clone().attr('id',column+'x'+row));
+					}
+				}
+				var currentPosition = 0;
+				var $currentTile = $();
+				//$currentTile.length = 1; //is it really needed ?
+				var $neighbors = $();
+				var neighborsIndex = 0;
+				var neighborsIndexes = [];
+				var rangeX = 0;
+				var rangeY = 0;
+				for (column=1; column<=y; column++) { //each element has its immediate neighbors in data for later optimization
+					for (row=1; row<=x; row++) {
+						($currentTile.context = $currentTile[0] = $tiles[currentPosition]);
+						$neighbors = $();
+						neighborsIndexes = [];
+						for (rangeX = (column-1); rangeX <= (column+1); rangeX++) {
+							for (rangeY = (row-1); rangeY <= (row+1); rangeY++) {
+								neighborsIndex = (rangeX-1)*x + rangeY - 1;
+								if (rangeX > 0
+								&& rangeX <= y
+								&& rangeY > 0
+								&& rangeY <= x
+								&& neighborsIndex != currentPosition) {
+									neighborsIndexes.push(neighborsIndex);
+								}
+							}
+						}
+						$.data($currentTile[0],'neighborsIndexes',neighborsIndexes);
+						currentPosition++;
+					}
+				}
+				$cleanBoard = $tiles; //once built, stored in memory in case next game in on same size
+			},
+			randomize = function(x,y,mines) {
+				var minesPositions = [];
+				var MT = new MersenneTwister();
+				while (minesPositions.length < mines) {
+					var rawNumber = MT.nextFloat(Date.now()) * (x * y); //seeded with time and board size
+					var bombingSpot = rawNumber - (rawNumber % 1); //casting float to integer
+					if (minesPositions.indexOf(bombingSpot) == -1) {
+						minesPositions.push(bombingSpot);
+					}
+				}
+				return minesPositions;
+			},
+			rebind = function() {
+				$board
+					.unbind('click')
+					.unbind('contextmenu')
+					.bind('click',function(mouseEvent) {
+						board.reveal($(mouseEvent.target));
+						return false;
+				}).bind('contextmenu',function(mouseEvent) {
+						board.toggleFlag($(mouseEvent.target), false);
+						return false;
+				});
+				$errorlog.val(""); //clear errors
+				time(true); //start timer on very end ! we're fair.
+			},
+			gameOver = function(win) {
+				if (!isGameOver) {
+					time(false); //stop timer
+					isGameOver=true; //end game (sometimes it is called several times)
+					
+					if (win) {
+						$smiley.css('background-position','-72px 0');
+						$board.not('.empty').filter(isNotMine).removeClass(); 
+					} else {
+						$smiley.css('background-position','-24px 0');
+						$board.find('.flag').filter(isNotMine).css('background-position','-182px 0');
+						$board.children().filter(isMine).not('.flag, .mine').css('background-position','-154px 0');
+					}
+					
+					$board.unbind();
+				}
+			},
+			isMine = function() {return $.data(this).is_mine;}, // helpers for gameOver 
+			isNotMine = function() {return !$.data(this).is_mine;};
+		return {
+			//public vars
+			lastX:0,
+			lastY:0,
+			lastMines:0,
+			//public functions
+			update:function($_form, $_formElements, $_hud, $_smiley) { //init elements once dom is loaded
+				$form = $_form;
+				$formElements = $_formElements;
+				$smiley = $_smiley;
+				$minesLeft = $_hud.find('#minesLeft');
+				$timeElapsed = $_hud.find('#timeElapsed');
+				$errorlog = $("#errorlog");
+				$board = $('#board');
+			},
+			checkAndGo:function() { //input validation
+				var proposedX = parseInt($formElements.eq(0).val());
+				var proposedY = parseInt($formElements.eq(1).val());
+				var proposedMines = parseInt($formElements.eq(2).val());
+				var currentDensity = proposedMines/(proposedX*proposedY); 
+				var easyModeDensity =  10/(9*9);
+				var hardModeDensity =  99/(30*16);
+				var maxTiles = 2501;
+				var errorStringArray = [];
+				while (proposedX < 9
+					|| proposedY < 9
+					|| proposedX * proposedY > maxTiles
+					|| currentDensity < easyModeDensity
+					|| currentDensity > hardModeDensity) {
+					if (proposedX < 9 || proposedY < 9) {
+						if (proposedX < 9) {proposedX = 9;}
+						if (proposedY < 9) {proposedY = 9;}
+						errorStringArray.push("Too small");
+					} else if (proposedX * proposedY > maxTiles) {
+						while (proposedX * proposedY > maxTiles) {
+							if (proposedX == Math.max(proposedX,proposedY)) {proposedX--;}
+							else {proposedY--;}
+						}
+						errorStringArray.push("Too big");
+					} else if (currentDensity < easyModeDensity) {
+						while (currentDensity < easyModeDensity) {
+							proposedMines++;
+							currentDensity = proposedMines/(proposedX*proposedY);
+						}
+						errorStringArray.push("Too easy");
+					} else if (currentDensity > hardModeDensity) {
+						while (currentDensity > hardModeDensity) {
+							proposedMines--;
+							currentDensity = proposedMines/(proposedX*proposedY);
+						}
+						errorStringArray.push("Too hard");
+					}
+				}
+				if (errorStringArray.length) {
+					errorStringArray.push("It has been adjusted.");
+					$errorlog.val(errorStringArray.join(" - "));
+				}
+				board.prepare(proposedX, proposedY, proposedMines);
+			},
+			reveal:function($target) { //sister function of updateTileDisplay - starts the process
+				if ($target.hasClass('unknown') && !$target.hasClass('flag')) {
+					$target.removeClass("unknown");
+					unknownsLeftCounter--;
+					if ($.data($target[0]).is_mine) {$target.addClass('mine'); gameOver(false);}
+					else {updateTileDisplay($target); updateMinesDisplayAndCheckForWin(true);}
+				}
+			},
+			toggleFlag:function($target, recursive) {
+				if ($target.hasClass('flag') || $target.hasClass('unknown')) {
+					if ($target.hasClass('flag')) {
+						$target.removeClass('flag');
+						minesLeftCounter++;
+						unknownsLeftCounter++;
+					} else {
+						$target.addClass('flag');
+						minesLeftCounter--;
+						unknownsLeftCounter--;
+					}
+					var $knownNeighbors = $.data($target[0],'neighbors').not('.unknown');
+					var $buffer = $();
+					$buffer.length = 1;
+					for (var i=0; i<$knownNeighbors.length; i++) {
+						($buffer.context = $buffer[0] = $knownNeighbors[i]);
+						updateTileDisplay($buffer);
+					}
+					if (!recursive) {updateMinesDisplayAndCheckForWin(true);}
+				}
+			},
+			prepare:function(x,y,mines) {
+				$board.unbind();
+				$timeElapsed.text("");
+				
+				if (board.lastX != x || board.lastY != y) {
+					if (board.lastX != x) {
+						$smiley.css({'margin-left':(x-2)*7-4+'px','margin-right':(x-3)*7-13+'px'});
+						$board.width(x*14);
+					}
+					if (board.lastY != y) {$board.height(y*14);}
+					generateCleanBoard(x,y);
+				}
+				
+				$formElements.eq(0).val(x);
+				$formElements.eq(1).val(y);
+				$formElements.eq(2).val(mines);
+				
+				if (board.lastX == 0) {
+					$board.css('border-color','#e6e6e6');
+				}
+				
+				isGameOver = false;
+				unknownsLeftCounter = x * y;
+				minesLeftCounter = mines;
+				updateMinesDisplayAndCheckForWin(false);
+				
+				board.lastX = x;
+				board.lastY = y;
+				board.lastMines = mines;
+				
+				$board
+					.bind('mousedown',function() {
+						$smiley.css('background-position','-48px 0px');
+					}).bind('mouseup',function() {
+						$smiley.css('background-position','0px 0px');
+					}).bind('click',function(mouseEvent) {
+						rebind();
+						board.start(x,y,mines,$(mouseEvent.target));
+						return false;
+					}).bind('contextmenu',function() {
+						return false;
+					});
+				
+				
+				$smiley.css('background-position','0 0');
+				$board.html($cleanBoard.clone(true));
+				$form.slideUp('slow');
+			},
+			quickStart:function() {
+				if (board.lastX == 0) {board.prepare(9,9,10);}
+				else {board.prepare(board.lastX,board.lastY,board.lastMines);}
+				return false;
+			},
+			start:function(x,y,mines,$mouseEventTarget) {
+				var mouseEventTargetID = $mouseEventTarget.attr('id');
+				var coords = mouseEventTargetID.split("x");
+				var targetPosition = (parseInt(coords[0]) - 1) * x + parseInt(coords[1]) - 1;
+				var indexes = $.data($mouseEventTarget[0],'neighborsIndexes');
+				indexes.push(targetPosition);
+				
+				var minesPositionsSet = randomize(x,y,mines);
+				while (array_big_intersect(indexes,minesPositionsSet).length > 0) {
+					minesPositionsSet = randomize(x,y,mines);
+				}
+				
+				var $upcomingBoard = $cleanBoard.clone(true);
+				var currentPosition = 0;
+				var $currentTile = $();
+				var $neighbors = $();
+				var neighborsIndexes = [];
+				var $buffer = $();
+				$buffer.length = 1;
+				for (var column_=1; column_<=y; column_++) {
+					for (var row_=1; row_<=x; row_++) {
+						($currentTile.context = $currentTile[0] = $upcomingBoard[currentPosition]);
+						neighborsIndexes = $.data($currentTile[0]).neighborsIndexes;
+						$neighbors = $();
+						for (var test = function(){
+								return {
+									i:0,
+									j:neighborsIndexes.length
+								};
+							}(); test.i < test.j; test.i++) {
+							//console.log(test.i);
+							($buffer.context = $buffer[0] = $upcomingBoard[neighborsIndexes[test.i]]);
+							$.merge($neighbors, $buffer);
+						}
+						
+						if (minesPositionsSet.indexOf(currentPosition) == -1) {
+							$.data($currentTile[0],{
+								'is_mine':false,
+								'minesAround':array_big_intersect(neighborsIndexes,minesPositionsSet).length,
+								'neighbors':$neighbors
+							});
+						} else {
+							$.data($currentTile[0],{
+								'is_mine':true,
+								'minesAround':array_big_intersect(neighborsIndexes,minesPositionsSet).length,
+								'neighbors':$neighbors
+							});
+						}
+						
+						currentPosition++;
+					}
+				}
+				$board.html($upcomingBoard);
+				($buffer.context = $buffer[0] = $board.children()[targetPosition]);
+				board.reveal($buffer);
+			}
+		}
+	}();
+	</script>
+  </div></body>
+</html>
