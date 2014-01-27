@@ -361,10 +361,10 @@
 				}
 			},
 			prepare:function(x,y,mines) {
-				$board.unbind();
+				$board.unbind(); //clear board
 				$timeElapsed.text("");
 				
-				if (board.lastX != x || board.lastY != y) {
+				if (board.lastX != x || board.lastY != y) { //adjust board size
 					if (board.lastX != x) {
 						$smiley.css({'margin-left':(x-2)*7-4+'px','margin-right':(x-3)*7-13+'px'});
 						$board.width(x*14);
@@ -373,7 +373,7 @@
 					generateCleanBoard(x,y);
 				}
 				
-				$formElements.eq(0).val(x);
+				$formElements.eq(0).val(x); //add values to the form (for UX)
 				$formElements.eq(1).val(y);
 				$formElements.eq(2).val(mines);
 				
