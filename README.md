@@ -7,9 +7,11 @@
 1. `minesweeper_dom.html` used to store data about the cells directly in the DOM.
 2. `minesweeper_beforeData.html` is snapshot, before the [jQuery](jquery.com) update which made `.data()` available.
 
-## Current features
+## Current state
 
-TODO
+Most of the magic happens in a big module in index.html. It is designed with speed in mind, so with minimal dom touches (and sprites).
+
+If anyone has friendlier graphics than the ones I shamefully stole... just contribute! But you do the sprite
 
 ## Trivia
 
